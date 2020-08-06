@@ -25,12 +25,17 @@ class KITTIDataset(Dataset):
         # R_to_angle(raw_odometry_matrix)
         # print(preprocessed_ground_truth)
         # print("_______________")
-
+        # Return two consecutive images
         return (
-            pil_to_tensor(self._dataset.get_cam0(index)),
-            pil_to_tensor(self._dataset.get_cam1(index)),
+            pil_to_tensor(self._dataset.get_cam0(index))/255.0,
+            pil_to_tensor(self._dataset.get_cam0(index+1))/255.0,
             preprocessed_ground_truth
         )
+        # return (
+        #     pil_to_tensor(self._dataset.get_cam0(index)),
+        #     pil_to_tensor(self._dataset.get_cam1(index)),
+        #     preprocessed_ground_truth
+        # )
 
     @staticmethod
     def preprocess_odometry_matrix(odometry_matrix):
