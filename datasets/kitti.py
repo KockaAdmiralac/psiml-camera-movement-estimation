@@ -1,25 +1,32 @@
 from torch.utils.data import Dataset
-from torchvision.transforms.functional import pil_to_tensor
+from torchvision.transforms.functional import center_crop, normalize, pil_to_tensor
 from pykitti import odometry
 from typing import Tuple
 from scipy.spatial.transform import Rotation
 import numpy as np
 import math
+import PIL
 import torch
+
+RESIZE_SIZE = [608, 184]
+#MEAN = (-0.14968217427134656, -0.12941663107068363, -0.1320610301921484)
+#STD = (1, 1, 1)
+MEAN = (-0.14968217427134656,)
+STD = (1,)
 
 class KITTIDataset(Dataset):
     def __init__(self, base_path: str, sequence: int):
         self._dataset = odometry(base_path, '{:02}'.format(sequence))
 
     def __len__(self) -> int:
-        return len(self._dataset.cam0_files)
+        return len(self._dataset.cam0_files) - 1
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-
-        raw_odometry_matrix = self._dataset.poses[index][:3,:4]
+        raw_odometry_matrix_1 = self._dataset.poses[index][:3,:4]
+        raw_odometry_matrix_2 = self._dataset.poses[index+1][:3,:4]
         # Rotation angles for x and z are replaced compared to referent code
-        # TODO: Interpretability  of axis needs to be investigated
-        preprocessed_ground_truth = self.preprocess_odometry_matrix(raw_odometry_matrix)
+        preprocessed_ground_truth_1 = self.preprocess_odometry_matrix(raw_odometry_matrix_1)
+        preprocessed_ground_truth_2 = self.preprocess_odometry_matrix(raw_odometry_matrix_2)
 
         # Checking if implementation is same as referent
         # R_to_angle(raw_odometry_matrix)
@@ -27,15 +34,20 @@ class KITTIDataset(Dataset):
         # print("_______________")
         # Return two consecutive images
         return (
-            pil_to_tensor(self._dataset.get_cam0(index))/255.0,
-            pil_to_tensor(self._dataset.get_cam0(index+1))/255.0,
-            preprocessed_ground_truth
+            self.preprocess_image(self._dataset.get_cam0(index)),
+            self.preprocess_image(self._dataset.get_cam0(index+1)),
+            preprocessed_ground_truth_2 - preprocessed_ground_truth_1
         )
-        # return (
-        #     pil_to_tensor(self._dataset.get_cam0(index)),
-        #     pil_to_tensor(self._dataset.get_cam1(index)),
-        #     preprocessed_ground_truth
-        # )
+
+    @staticmethod
+    def preprocess_image(image: PIL.Image) -> torch.Tensor:
+        #image = center_crop(image, RESIZE_SIZE)
+        # or resize()
+        image = pil_to_tensor(image)
+        image = image / 255.0
+        image = normalize(image, MEAN, STD)
+        print(image)
+        return image
 
     @staticmethod
     def preprocess_odometry_matrix(odometry_matrix):
