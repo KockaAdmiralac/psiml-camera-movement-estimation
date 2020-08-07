@@ -38,15 +38,15 @@ def main():
     summary_writer = SummaryWriter()
 
     # Train set
-    dataset = KITTIDataset(args.kitti_base_dir, [1, 2], args.batch_size)
+    dataset = KITTIDataset(args.kitti_base_dir, [1, 2])
     dataloader = DataLoader(
         dataset=dataset,
-        batch_size=1,
+        batch_size=args.batch_size,
         shuffle=False,
         drop_last=True
     )
     # Validation set:
-    validation_dataset = KITTIDataset(args.kitti_base_dir, [3, 4], args.batch_size)
+    validation_dataset = KITTIDataset(args.kitti_base_dir, [3, 4])
     validation_dataloader = DataLoader(
         dataset=validation_dataset,
         batch_size=1,
@@ -97,6 +97,17 @@ def main():
             raw_output_diff += torch.mean(torch.abs(y - ground_truth), dim=0)
             if global_step % args.tboard_step == 0:
                 summary_writer.add_scalar("train_loss/Batch loss", batch_loss, global_step)
+                print("Total avg epoch loss: {}".format(total_loss / epoch_steps))
+                print("Total avg raw diff: {}".format(raw_output_diff / epoch_steps))
+                for i in range(6):
+                    if i < 3:
+                        summary_writer.add_scalar("train_raw/Average Train RotAngle{} degrees diff".format(i),
+                                                  raw_output_diff[i] * 2 * np.pi / epoch_steps, global_step)
+                    else:
+                        summary_writer.add_scalar("train_raw/Average Train TransVector{} diff".format(i - 3),
+                                                  raw_output_diff[i] / epoch_steps,
+                                                  global_step)
+                    summary_writer.add_scalar("train_loss/Epoch average loss", total_loss / epoch_steps, global_step)
                 do_validation(validation_dataloader, model, args.validation_size, loss, use_cuda, global_step,
                               summary_writer)
             # zero the parameter gradients
@@ -106,17 +117,6 @@ def main():
             global_step += 1
             epoch_steps += 1
 
-        print("Total avg epoch loss: {}".format(total_loss / epoch_steps))
-        print("Total avg raw diff: {}".format(raw_output_diff / epoch_steps))
-        for i in range(6):
-            if i < 3:
-                summary_writer.add_scalar("train_raw/Average Train RotAngle{} degrees diff".format(i),
-                                          raw_output_diff[i] * 2 * np.pi / epoch_steps, global_step)
-            else:
-                summary_writer.add_scalar("train_raw/Average Train TransVector{} diff".format(i-3),
-                                          raw_output_diff[i] / epoch_steps,
-                                          global_step)
-            summary_writer.add_scalar("train_loss/Epoch average loss", total_loss / epoch_steps, global_step)
         if not os.path.exists(args.output_path):
             os.makedirs(args.output_path)
         torch.save(model.state_dict(), os.path.join(args.output_path, args.model_tag + "_e" + str(epoch) + ".model"))
@@ -125,7 +125,7 @@ def main():
 
 
 def do_validation(validation_dataloader, model, validation_size, loss, use_cuda, global_step, summary_writer):
-    # Validation at the end of epoch
+
     with torch.no_grad():
         validation_step = 0
         validation_loss = 0

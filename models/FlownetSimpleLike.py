@@ -36,14 +36,12 @@ def conv(batchNorm, in_planes, out_planes, kernel_size=3, stride=1):
 
 
 class FlowNetS(nn.Module):
-    expansion = 1
 
     def __init__(self, batchNorm=True):
         super(FlowNetS, self).__init__()
 
         self.batchNorm = batchNorm
-        # Fixme: Add 6 for RGB
-        self.conv1 = conv(self.batchNorm, 2, 64, kernel_size=7, stride=2)
+        self.conv1 = conv(self.batchNorm, 6, 64, kernel_size=7, stride=2)
         self.conv2 = conv(self.batchNorm, 64, 128, kernel_size=5, stride=2)
         self.conv3 = conv(self.batchNorm, 128, 256, kernel_size=5, stride=2)
         self.conv3_1 = conv(self.batchNorm, 256, 256)
@@ -56,7 +54,7 @@ class FlowNetS(nn.Module):
 
         # TODO: Add regression for output
         # Dummy - rescale input, use RGB, this is just for testing
-        self.fc1 = nn.Linear(1024 * 6 * 20, 1000) # nn.Linear(1024*3*10, 6)
+        self.fc1 = nn.Linear(1024 * 3 * 10, 1000)
         self.relu_fc1 = nn.ReLU()
         self.fc2 = nn.Linear(1000, 100)
         self.relu_fc2 = nn.ReLU()
@@ -71,7 +69,7 @@ class FlowNetS(nn.Module):
         out_conv5 = self.conv5_1(self.conv5(out_conv4))
         out_conv6 = self.conv6_1(self.conv6(out_conv5))
 
-        fc1 = self.relu_fc1(self.fc1(out_conv6.reshape(-1, 1024*6*20)))
+        fc1 = self.relu_fc1(self.fc1(out_conv6.reshape(-1, 1024*3*10)))
         fc2 = self.relu_fc2(self.fc2(fc1))
 
         return self.output(fc2)

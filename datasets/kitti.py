@@ -12,27 +12,32 @@ MEAN = (-0.14968217427134656, -0.12941663107068363, -0.1320610301921484)
 STD = (1, 1, 1)
 
 class KITTIDataset(Dataset):
-    def __init__(self, base_path: str, sequences: List[int], batch_size: int):
+    def __init__(self, base_path: str, sequences: List[int]):
         self.sequences = sequences
-        self.batch_size = batch_size
         self._datasets = [odometry(base_path, '{:02}'.format(sequence)) for sequence in sequences]
         self.length = 0
         self.idx_to_dataset = {}
         last_index = 0
-        for dataset in self._datasets:
-            length = len(dataset.cam2_files) // batch_size
-            self.length += length * batch_size
-            for i in range(length):
-                self.idx_to_dataset[last_index + i] = dataset
-            last_index += length
+        for dataset_index, dataset in enumerate(self._datasets):
+            length = len(dataset.cam2_files)
+            self.length += length-1
+            for i in range(length-1):
+                self.idx_to_dataset[last_index + i] = dataset_index
+            last_index += length-1
+        pass
 
     def __len__(self) -> int:
         return self.length
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        current_dataset = self.idx_to_dataset[index // self.batch_size]
-        raw_odometry_matrix_1 = current_dataset.poses[index][:3,:4]
-        raw_odometry_matrix_2 = current_dataset.poses[index+1][:3,:4]
+        current_dataset_index = self.idx_to_dataset[index]
+        current_dataset = self._datasets[current_dataset_index]
+        index_in_dataset = index
+        for i in range(current_dataset_index):
+            index_in_dataset -= len(self._datasets[i].cam2_files)
+
+        raw_odometry_matrix_1 = current_dataset.poses[index_in_dataset][:3,:4]
+        raw_odometry_matrix_2 = current_dataset.poses[index_in_dataset+1][:3,:4]
 
         # Rotation angles for x and z are replaced compared to referent code
         preprocessed_ground_truth_1 = self.preprocess_odometry_matrix(raw_odometry_matrix_1)
@@ -40,8 +45,8 @@ class KITTIDataset(Dataset):
 
         # Return two consecutive images
         return (
-            self.preprocess_image(current_dataset.get_cam2(index)),
-            self.preprocess_image(current_dataset.get_cam2(index + 1)),
+            self.preprocess_image(current_dataset.get_cam2(index_in_dataset)),
+            self.preprocess_image(current_dataset.get_cam2(index_in_dataset + 1)),
             preprocessed_ground_truth_2 - preprocessed_ground_truth_1
         )
 
