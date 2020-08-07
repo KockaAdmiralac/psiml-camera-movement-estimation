@@ -1,7 +1,7 @@
 from torch.utils.data import Dataset
 from torchvision.transforms.functional import center_crop, normalize, to_tensor
 from pykitti import odometry
-from typing import Tuple
+from typing import List, Tuple
 from scipy.spatial.transform import Rotation
 import numpy as np
 import PIL
@@ -12,15 +12,27 @@ MEAN = (-0.14968217427134656, -0.12941663107068363, -0.1320610301921484)
 STD = (1, 1, 1)
 
 class KITTIDataset(Dataset):
-    def __init__(self, base_path: str, sequence: int):
-        self._dataset = odometry(base_path, '{:02}'.format(sequence))
+    def __init__(self, base_path: str, sequences: List[int], batch_size: int):
+        self.sequences = sequences
+        self.batch_size = batch_size
+        self._datasets = [odometry(base_path, '{:02}'.format(sequence)) for sequence in sequences]
+        self.length = 0
+        self.idx_to_dataset = {}
+        last_index = 0
+        for dataset in self._datasets:
+            length = len(dataset.cam2_files) // batch_size
+            self.length += length * batch_size
+            for i in range(length):
+                self.idx_to_dataset[last_index + i] = dataset
+            last_index += length
 
     def __len__(self) -> int:
-        return len(self._dataset.cam2_files) - 1
+        return self.length
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        raw_odometry_matrix_1 = self._dataset.poses[index][:3,:4]
-        raw_odometry_matrix_2 = self._dataset.poses[index+1][:3,:4]
+        current_dataset = self.idx_to_dataset[index // self.batch_size]
+        raw_odometry_matrix_1 = current_dataset.poses[index][:3,:4]
+        raw_odometry_matrix_2 = current_dataset.poses[index+1][:3,:4]
 
         # Rotation angles for x and z are replaced compared to referent code
         preprocessed_ground_truth_1 = self.preprocess_odometry_matrix(raw_odometry_matrix_1)
@@ -28,8 +40,8 @@ class KITTIDataset(Dataset):
 
         # Return two consecutive images
         return (
-            self.preprocess_image(self._dataset.get_cam2(index)),
-            self.preprocess_image(self._dataset.get_cam2(index+1)),
+            self.preprocess_image(current_dataset.get_cam2(index)),
+            self.preprocess_image(current_dataset.get_cam2(index + 1)),
             preprocessed_ground_truth_2 - preprocessed_ground_truth_1
         )
 
@@ -45,7 +57,7 @@ class KITTIDataset(Dataset):
     def preprocess_odometry_matrix(odometry_matrix: np.ndarray) -> torch.Tensor:
         """
         Rotation matrix to Euler angles
-        Return [float]: Angles and translation
+        Return [torch.Tensor]: Angles and translation
         :return:
         """
         rotation = Rotation.from_matrix(odometry_matrix[0:3,0:3])

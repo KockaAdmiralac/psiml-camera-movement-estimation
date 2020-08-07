@@ -4,7 +4,6 @@ from models.FlownetSimpleLike import FlowNetS, RMSEWeightedLoss
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import os
-import cv2
 import torch
 import argparse
 
@@ -36,7 +35,7 @@ def main():
     summary_writer = SummaryWriter()
 
     # Train set
-    dataset = KITTIDataset(args.kitti_base_dir, 1)
+    dataset = KITTIDataset(args.kitti_base_dir, [1, 2], args.batch_size)
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=args.batch_size,
@@ -44,7 +43,7 @@ def main():
         drop_last=True
     )
     # Validation set:
-    validation_dataset = KITTIDataset(args.kitti_base_dir, 2)
+    validation_dataset = KITTIDataset(args.kitti_base_dir, [3, 4], args.batch_size)
     validation_dataloader = DataLoader(
         dataset=validation_dataset,
         batch_size=1,
