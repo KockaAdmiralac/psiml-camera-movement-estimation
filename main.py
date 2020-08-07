@@ -38,7 +38,7 @@ def main():
     summary_writer = SummaryWriter()
 
     # Train set
-    dataset = KITTIDataset(args.kitti_base_dir, [1, 2])
+    dataset = KITTIDataset(args.kitti_base_dir, [0, 2, 5, 6, 7, 8, 9, 10])
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=args.batch_size,
@@ -46,7 +46,7 @@ def main():
         drop_last=True
     )
     # Validation set:
-    validation_dataset = KITTIDataset(args.kitti_base_dir, [3, 4])
+    validation_dataset = KITTIDataset(args.kitti_base_dir, [1, 3, 4])
     validation_dataloader = DataLoader(
         dataset=validation_dataset,
         batch_size=1,
@@ -95,10 +95,11 @@ def main():
             batch_loss = loss(y, ground_truth)
             total_loss += batch_loss
             raw_output_diff += torch.mean(torch.abs(y - ground_truth), dim=0)
-            if global_step % args.tboard_step == 0:
+            if global_step > 0 and global_step % args.tboard_step == 0:
                 summary_writer.add_scalar("train_loss/Batch loss", batch_loss, global_step)
                 print("Total avg epoch loss: {}".format(total_loss / epoch_steps))
                 print("Total avg raw diff: {}".format(raw_output_diff / epoch_steps))
+
                 for i in range(6):
                     if i < 3:
                         summary_writer.add_scalar("train_raw/Average Train RotAngle{} degrees diff".format(i),
