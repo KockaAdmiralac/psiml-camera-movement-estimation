@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class RMSEWeightedLoss(nn.Module):
     def __init__(self, eps=1e-6, beta=10):
         super().__init__()
@@ -10,7 +11,7 @@ class RMSEWeightedLoss(nn.Module):
 
     def forward(self, yhat, y):
         # Weighted RMSE loss
-        loss = self.beta*torch.sqrt(self.mse(y[:3], yhat[:3]) + self.eps)+torch.sqrt(self.mse(y[3:], yhat[3:]) + self.eps)
+        loss = self.beta*torch.sqrt(self.mse(y[:,:3], yhat[:,:3]) + self.eps)+torch.sqrt(self.mse(y[:,3:], yhat[:,3:]) + self.eps)
         return loss
 
 # Taken and adapted from:
@@ -50,13 +51,17 @@ class FlowNetS(nn.Module):
         self.conv5_1 = conv(self.batchNorm, 512, 512)
         self.conv6 = conv(self.batchNorm, 512, 1024, stride=2)
         self.conv6_1 = conv(self.batchNorm, 1024, 1024)
+
         # TODO: Add regression for output
         # Dummy - rescale input, use RGB, this is just for testing
-        self.output = nn.Linear(1024*6*20, 6)
+        self.fc1 = nn.Linear(1024 * 6 * 20, 1000) # nn.Linear(1024*3*10, 6)
+        self.relu_fc1 = nn.ReLU()
+        self.fc2 = nn.Linear(1000, 100)
+        self.relu_fc2 = nn.ReLU()
+        self.output = nn.Linear(100, 6)
 
     def forward(self, x):
         # x is stacked 2 images - t, t+1
-
         self.conv1(x)
         out_conv2 = self.conv2(self.conv1(x))
         out_conv3 = self.conv3_1(self.conv3(out_conv2))
@@ -64,4 +69,7 @@ class FlowNetS(nn.Module):
         out_conv5 = self.conv5_1(self.conv5(out_conv4))
         out_conv6 = self.conv6_1(self.conv6(out_conv5))
 
-        return self.output(out_conv6.reshape(-1, 1024*6*20))
+        fc1 = self.relu_fc1(self.fc1(out_conv6.reshape(-1, 1024*6*20)))
+        fc2 = self.relu_fc2(self.fc2(fc1))
+
+        return self.output(fc2)
