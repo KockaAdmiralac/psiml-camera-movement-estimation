@@ -25,6 +25,8 @@ def main():
                         default=40)
     parser.add_argument('--tboard-step', type=int,
                         default=10)
+    parser.add_argument('--save-model-step', type=int,
+                        default=200)
     parser.add_argument('--learning-rate', type=float,
                         default=0.001)
     parser.add_argument('--pretrained-flownet', type=str,
@@ -38,7 +40,7 @@ def main():
     summary_writer = SummaryWriter()
 
     # Train set
-    dataset = KITTIDataset(args.kitti_base_dir, [1, 2])
+    dataset = KITTIDataset(args.kitti_base_dir, [0, 2, 5, 6, 7, 8, 9, 10])
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=args.batch_size,
@@ -46,7 +48,7 @@ def main():
         drop_last=True
     )
     # Validation set:
-    validation_dataset = KITTIDataset(args.kitti_base_dir, [3, 4])
+    validation_dataset = KITTIDataset(args.kitti_base_dir, [1, 3, 4])
     validation_dataloader = DataLoader(
         dataset=validation_dataset,
         batch_size=1,
@@ -95,10 +97,11 @@ def main():
             batch_loss = loss(y, ground_truth)
             total_loss += batch_loss
             raw_output_diff += torch.mean(torch.abs(y - ground_truth), dim=0)
-            if global_step % args.tboard_step == 0:
+            if global_step > 0 and global_step % args.tboard_step == 0:
                 summary_writer.add_scalar("train_loss/Batch loss", batch_loss, global_step)
-                print("Total avg epoch loss: {}".format(total_loss / epoch_steps))
-                print("Total avg raw diff: {}".format(raw_output_diff / epoch_steps))
+                print("Step {} avg epoch loss: {}".format(global_step, total_loss / epoch_steps))
+                print("Step {} avg raw diff: {}".format(global_step, raw_output_diff / epoch_steps))
+
                 for i in range(6):
                     if i < 3:
                         summary_writer.add_scalar("train_raw/Average Train RotAngle{} degrees diff".format(i),
@@ -117,6 +120,13 @@ def main():
             global_step += 1
             epoch_steps += 1
 
+            if global_step % args.save_model_step == 0:
+                if not os.path.exists(args.output_path):
+                    os.makedirs(args.output_path)
+                torch.save(model.state_dict(),
+                           os.path.join(args.output_path,
+                                        args.model_tag + "_e" + str(epoch) + "_gstep" + str(global_step) + ".model"))
+
         if not os.path.exists(args.output_path):
             os.makedirs(args.output_path)
         torch.save(model.state_dict(), os.path.join(args.output_path, args.model_tag + "_e" + str(epoch) + ".model"))
@@ -125,7 +135,6 @@ def main():
 
 
 def do_validation(validation_dataloader, model, validation_size, loss, use_cuda, global_step, summary_writer):
-
     with torch.no_grad():
         validation_step = 0
         validation_loss = 0
@@ -146,7 +155,7 @@ def do_validation(validation_dataloader, model, validation_size, loss, use_cuda,
             validation_loss += batch_loss
             validation_step += 1
 
-        print("Val avg raw diff: {}".format(raw_output_diff / validation_step))
+        print("Global step {} Val avg raw diff: {}".format(global_step, raw_output_diff / validation_step))
         for i in range(6):
             if i < 3:
                 summary_writer.add_scalar("val_raw/Average Val RotAngle{} degrees diff".format(i),
@@ -156,8 +165,9 @@ def do_validation(validation_dataloader, model, validation_size, loss, use_cuda,
                                           raw_output_diff[i] / validation_step,
                                           global_step)
         summary_writer.add_scalar("val_loss/Val average loss", validation_loss / validation_step, global_step)
-        print("Validation avg loss: {}".format(validation_loss / validation_step))
+        print("Global step {} Validation avg loss: {}".format(global_step, validation_loss / validation_step))
         # TODO: Add random validation images
+
 
 if __name__ == '__main__':
     main()
