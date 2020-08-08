@@ -1,7 +1,8 @@
+from math import degrees
 from torch.utils.data import Dataset
 from torchvision.transforms.functional import center_crop, normalize, to_tensor
 from pykitti import odometry
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 from scipy.spatial.transform import Rotation
 import numpy as np
 import PIL
@@ -12,11 +13,16 @@ MEAN = (-0.14968217427134656, -0.12941663107068363, -0.1320610301921484)
 STD = (1, 1, 1)
 
 class KITTIDataset(Dataset):
+    # Maps index // batch_size to the dataset under that index
+    idx_to_dataset: Dict[int, int] = {}
+    # Length of the whole dataset (all sequences summed, rounded by batch_size)
+    length: int = 0
+    # All loaded sequences
+    sequences: List[int]
+
     def __init__(self, base_path: str, sequences: List[int]):
         self.sequences = sequences
         self._datasets = [odometry(base_path, '{:02}'.format(sequence)) for sequence in sequences]
-        self.length = 0
-        self.idx_to_dataset = {}
         last_index = 0
         for dataset_index, dataset in enumerate(self._datasets):
             length = len(dataset.cam2_files)
@@ -49,6 +55,9 @@ class KITTIDataset(Dataset):
             self.preprocess_image(current_dataset.get_cam2(index_in_dataset + 1)),
             preprocessed_ground_truth_2 - preprocessed_ground_truth_1
         )
+
+    def dataset_idx(self, idx: int) -> int:
+        return self.idx_to_dataset[idx]
 
     @staticmethod
     def preprocess_image(image: PIL.Image) -> torch.Tensor:
