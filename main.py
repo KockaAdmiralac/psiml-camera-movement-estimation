@@ -20,7 +20,7 @@ def main():
     parser.add_argument('--batch-size', type=int,
                         default=10)
     parser.add_argument('--validation-size', type=int,
-                        default=10)
+                        default=1000)
     parser.add_argument('--epochs', type=int,
                         default=40)
     parser.add_argument('--tboard-step', type=int,
@@ -40,7 +40,7 @@ def main():
     summary_writer = SummaryWriter()
 
     # Train set
-    dataset = KITTIDataset(args.kitti_base_dir, [0]) #, 2, 5, 6, 7, 8, 9, 10
+    dataset = KITTIDataset(args.kitti_base_dir, [0, 2, 5, 6, 7, 8, 9, 10]) #
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=args.batch_size,
@@ -48,7 +48,7 @@ def main():
         drop_last=True
     )
     # Validation set:
-    validation_dataset = KITTIDataset(args.kitti_base_dir, [0]) #, 3, 4
+    validation_dataset = KITTIDataset(args.kitti_base_dir, [1,3,4]) #, 3, 4
     validation_dataloader = DataLoader(
         dataset=validation_dataset,
         batch_size=1,
@@ -81,7 +81,7 @@ def main():
     loss = RMSEWeightedLoss()
     #lr_sheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
-    global_step = 1000
+    global_step = 0
 
     for epoch in range(args.epochs):
         print("Epoch:{}".format(epoch))
@@ -115,7 +115,7 @@ def main():
                                                   raw_output_diff[i] / epoch_steps,
                                                   global_step)
                     summary_writer.add_scalar("train_loss/Epoch average loss", total_loss / epoch_steps, global_step)
-                #val_loss = do_validation(validation_dataloader, model, args.validation_size, loss, use_cuda, global_step, summary_writer)
+                val_loss = do_validation(validation_dataloader, model, args.validation_size, loss, use_cuda, global_step, summary_writer)
             # zero the parameter gradients
             optimizer.zero_grad()
             batch_loss.backward()

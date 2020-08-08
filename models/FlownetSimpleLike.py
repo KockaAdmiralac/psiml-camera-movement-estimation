@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class RMSEWeightedLoss(nn.Module):
-    def __init__(self, eps=1e-6, beta=1):
+    def __init__(self, eps=1e-6, beta=10):
         super().__init__()
         self.mse = nn.MSELoss()
         self.eps = eps
