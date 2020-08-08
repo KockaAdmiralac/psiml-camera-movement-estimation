@@ -14,6 +14,8 @@ from typing import Tuple
 import math
 import numpy as np
 import torch
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 # https://gist.github.com/WetHat/1d6cd0f7309535311a539b42cccca89c
 class Arrow3D(FancyArrowPatch):
@@ -40,6 +42,7 @@ def main():
     parser.add_argument('--validation-size', type=int, default=1000)
     args = parser.parse_args()
     fig = plt.figure()
+    use_cuda = torch.cuda.is_available()
     ax = fig.gca(projection='3d')
     ax.set_xlabel('x')
     ax.set_ylabel('y')
@@ -50,6 +53,9 @@ def main():
     our = [[], [], []]
     model = FlowNetS()
     model.load_state_dict(torch.load(args.model, map_location=torch.device('cpu')))
+    if use_cuda:
+        print('CUDA used.')
+        model = model.cuda()
     model.eval()
     starting_points = [np.array([0., 0., 0.]) for _ in args.sequences]
     starting_rotations = [np.array([0., 0., 0.]) for _ in args.sequences]
@@ -65,9 +71,9 @@ def main():
     )
     i = 0
     validation_step = 0
-    use_cuda = torch.cuda.is_available()
+
     with torch.no_grad():
-        for batch in dataloader:
+        for i, batch in enumerate(dataloader):
             if args.validation_size >= 0 and validation_step >= args.validation_size:
                 break
             cam0_img, cam1_img, ground_truth = batch
@@ -98,8 +104,9 @@ def main():
             our[2].append(starting_points_estimate[dataset_idx][2])
             ax.plot3D(*kitti)
             ax.plot3D(*our)
-    ax.plot3D(np.array(kitti).transpose())
-    ax.plot3D(np.array(our))
+            
+    ax.plot3D(*kitti)
+    ax.plot3D(*our)
     plt.show()
 
 if __name__ == '__main__':
