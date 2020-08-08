@@ -83,18 +83,22 @@ def main():
             y = model(input_tensor)
             y = y.to("cpu")
             rotation = sum(ground_truth[:, 0:3]).numpy()
+            rotation_estimate = sum(y[:, 0:3]).numpy()
             translation = sum(ground_truth[:, 3:6]).numpy()
             translation_estimate = sum(y[:, 3:6]).numpy()
-            print(translation, translation_estimate)
             dataset_idx = dataset.dataset_idx(i)
+            p = starting_points[dataset_idx].copy()
+            pe = starting_points_estimate[dataset_idx].copy()
             starting_points[dataset_idx] += translation
             starting_points_estimate[dataset_idx] += translation_estimate
-            starting_rotations[dataset_idx] += rotation
             r = Rotation.from_euler('zxy', starting_rotations[dataset_idx], degrees=False)
-            p = starting_points[dataset_idx]
-            camera_point = r.apply(np.array([1, 0, 0])) + p
-            print(p, camera_point)
+            re = Rotation.from_euler('zxy', starting_rotations_estimate[dataset_idx], degrees=False)
+            camera_point = r.apply(starting_points[dataset_idx])
+            camera_point_estimate = re.apply(starting_points_estimate[dataset_idx])
             ax.add_artist(Arrow3D(p, camera_point, arrowstyle='-|>'))
+            ax.add_artist(Arrow3D(pe, camera_point_estimate, arrowstyle='-|>'))
+            starting_rotations[dataset_idx] += rotation
+            starting_rotations_estimate[dataset_idx] += rotation_estimate
             i += len(batch)
             kitti[0].append(starting_points[dataset_idx][0])
             kitti[1].append(starting_points[dataset_idx][1])
@@ -104,7 +108,7 @@ def main():
             our[2].append(starting_points_estimate[dataset_idx][2])
             ax.plot3D(*kitti)
             ax.plot3D(*our)
-            
+            print(i)
     ax.plot3D(*kitti)
     ax.plot3D(*our)
     plt.show()
