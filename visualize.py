@@ -35,7 +35,7 @@ class Arrow3D(FancyArrowPatch):
 
 def main():
     parser = ArgumentParser(description='Camera movement estimation visualizer')
-    parser.add_argument('-s', '--sequences', nargs='+', type=int, default=[1])
+    parser.add_argument('-s', '--sequences', nargs='+', type=int, default=[0])
     parser.add_argument('-b', '--batch-size', type=int, default=10)
     parser.add_argument('--kitti-base-dir', type=str, default='../dataset')
     parser.add_argument('-m', '--model', type=str, required=True)
@@ -81,7 +81,7 @@ def main():
         for i, batch in enumerate(dataloader):
             if args.validation_size >= 0 and validation_step >= args.validation_size:
                 break
-            cam0_img, cam1_img, ground_truth = batch
+            cam0_img, cam1_img, ground_truth, previous_raw_mattrix = batch
             input_tensor = torch.cat((cam0_img, cam1_img), 1)
             if use_cuda:
                 input_tensor = input_tensor.cuda()
@@ -93,7 +93,12 @@ def main():
             rotation = sum(ground_truth[:, 0:3]).numpy()
             rotation_estimate = sum(y[:, 0:3]).numpy()
             translation = sum(ground_truth[:, 3:6]).numpy()
+            translation = previous_raw_mattrix[0][:3,:3].numpy().dot(translation)
+
             translation_estimate = sum(y[:, 3:6]).numpy()
+
+            # Use ground truth rotation to rotate transation: - careful with this
+            # translation_estimate = previous_raw_mattrix[0][:3, :3].numpy().dot(translation_estimate)
             dataset_idx = dataset.dataset_idx(i)
             p = starting_points[dataset_idx].copy()
             pe = starting_points_estimate[dataset_idx].copy()
@@ -103,8 +108,9 @@ def main():
             re = Rotation.from_euler('zxy', starting_rotations_estimate[dataset_idx], degrees=False)
             if (max(r.as_euler('zxy', degrees=True)- re.as_euler('zxy', degrees=True))) > 5:
                 print(r.as_euler('zxy', degrees=True), re.as_euler('zxy', degrees=True))
-                print()
-            #translation_estimate = re.apply(translation_estimate)
+
+            # Use prediction rotation to rotate translation
+            translation_estimate = re.apply(translation_estimate)
             starting_points_estimate[dataset_idx] += translation_estimate
 
             camera_point = r.apply((0,0,6))
@@ -122,8 +128,8 @@ def main():
             our[1].append(starting_points_estimate[dataset_idx][1])
             our[2].append(starting_points_estimate[dataset_idx][2])
             print(i)
-            if i>300:
-                break
+            # if i>600:
+            #     break
     ax.plot3D(*kitti)
     ax.plot3D(*our)
     plt.show()

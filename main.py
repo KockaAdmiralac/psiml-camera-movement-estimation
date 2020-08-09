@@ -90,7 +90,7 @@ def main():
         raw_output_diff = torch.zeros(6)
         for batch in dataloader:
             model.train()
-            cam0_img, cam1_img, ground_truth = batch
+            cam0_img, cam1_img, ground_truth,_ = batch
 
             input_tensor = torch.cat((cam0_img, cam1_img), 1)
             if use_cuda:

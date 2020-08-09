@@ -55,7 +55,7 @@ class KITTIDataset(Dataset):
         return (
             self.preprocess_image(current_dataset.get_cam2(index_in_dataset)),
             self.preprocess_image(current_dataset.get_cam2(index_in_dataset + 1)),
-            ground_truth
+            ground_truth, raw_odometry_matrix_2
         )
 
     def dataset_idx(self, idx: int) -> int:
