@@ -55,9 +55,9 @@ def main():
         shuffle=True,
         drop_last=True
     )
-    model = FlowNetS()
-    # from models.FlownetSimpleLikeV2 import FlowNetS_V2
-    # model = FlowNetS_V2()
+    #model = FlowNetS()
+    from models.FlownetSimpleLikeV2 import FlowNetS_V2
+    model = FlowNetS_V2()
 
     if args.pretrained_flownet:
         pretrained_w = torch.load(args.pretrained_flownet, map_location='cpu')
@@ -130,6 +130,17 @@ def main():
                            os.path.join(args.output_path,
                                         args.model_tag + "_e" + str(epoch) + "_gstep" + str(global_step) + ".model"))
 
+        for i in range(6):
+            if i < 3:
+                summary_writer.add_scalar("train_raw/Epoch Train RotAngle{} degrees diff".format(i),
+                                          raw_output_diff[i] / np.pi * 180 / epoch_steps, global_step)
+            else:
+                summary_writer.add_scalar("train_raw/Epoch Train TransVector{} diff".format(i - 3),
+                                          raw_output_diff[i] / epoch_steps,
+                                          global_step)
+            summary_writer.add_scalar("train_loss/Epoch average loss", total_loss / epoch_steps, global_step)
+        val_loss = do_validation(validation_dataloader, model, -1, loss, use_cuda, global_step, summary_writer, True)
+
         if not os.path.exists(args.output_path):
             os.makedirs(args.output_path)
         torch.save(model.state_dict(), os.path.join(args.output_path, args.model_tag + "_e" + str(epoch) + ".model"))
@@ -137,7 +148,7 @@ def main():
         do_validation(validation_dataloader, model, args.validation_size, loss, use_cuda, global_step, summary_writer)
 
 
-def do_validation(validation_dataloader, model, validation_size, loss, use_cuda, global_step, summary_writer):
+def do_validation(validation_dataloader, model, validation_size, loss, use_cuda, global_step, summary_writer, special=False):
     model.eval()
     with torch.no_grad():
         validation_step = 0
@@ -159,16 +170,28 @@ def do_validation(validation_dataloader, model, validation_size, loss, use_cuda,
             validation_loss += batch_loss
             validation_step += 1
 
-        print("Global step {} Val avg raw diff: {}".format(global_step, raw_output_diff / validation_step))
-        for i in range(6):
-            if i < 3:
-                summary_writer.add_scalar("val_raw/Average Val RotAngle{} degrees diff".format(i),
-                                          raw_output_diff[i] / np.pi*180 / validation_step, global_step)
-            else:
-                summary_writer.add_scalar("val_raw/Average Val TransVector{} diff".format(i - 3),
-                                          raw_output_diff[i] / validation_step,
-                                          global_step)
-        summary_writer.add_scalar("val_loss/Val average loss", validation_loss / validation_step, global_step)
+        if special:
+            print("Global step {} Val avg raw diff: {}".format(global_step, raw_output_diff / validation_step))
+            for i in range(6):
+                if i < 3:
+                    summary_writer.add_scalar("val_raw/Entire Val RotAngle{} degrees diff".format(i),
+                                              raw_output_diff[i] / np.pi*180 / validation_step, global_step)
+                else:
+                    summary_writer.add_scalar("val_raw/Entire Val TransVector{} diff".format(i - 3),
+                                              raw_output_diff[i] / validation_step,
+                                              global_step)
+            summary_writer.add_scalar("val_loss/Entire average loss", validation_loss / validation_step, global_step)
+        else:
+            print("Global step {} Val avg raw diff: {}".format(global_step, raw_output_diff / validation_step))
+            for i in range(6):
+                if i < 3:
+                    summary_writer.add_scalar("val_raw/Average Val RotAngle{} degrees diff".format(i),
+                                              raw_output_diff[i] / np.pi * 180 / validation_step, global_step)
+                else:
+                    summary_writer.add_scalar("val_raw/Average Val TransVector{} diff".format(i - 3),
+                                              raw_output_diff[i] / validation_step,
+                                              global_step)
+            summary_writer.add_scalar("val_loss/Val average loss", validation_loss / validation_step, global_step)
         print("Global step {} Validation avg loss: {}".format(global_step, validation_loss / validation_step))
         # TODO: Add random validation images
         return validation_loss/validation_step

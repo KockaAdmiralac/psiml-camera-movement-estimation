@@ -38,14 +38,18 @@ class FlowNetS_V2(nn.Module):
         self.conv6 = conv(self.batchNorm, 512, 1024, stride=2)
         self.conv6_1 = conv(self.batchNorm, 1024, 1024)
 
+        self.conv7 = nn.Conv2d(1024, 512, kernel_size=3, stride=1, padding=0,
+                  bias=True)
+        self.ac_conv7 = nn.LeakyReLU(0.1, inplace=True)
+
         # Dummy - rescale input, use RGB, this is just for testing
-        self.fc1_branch_angle = nn.Linear(1024 * 3 * 10, 500)
+        self.fc1_branch_angle = nn.Linear(512 * 8, 500)
         self.relu_fc1_branch_angle = nn.ReLU()
         self.fc2_branch_angle = nn.Linear(500, 100)
         self.relu_fc2_branch_angle = nn.ReLU()
         self.output_branch_angle = nn.Linear(100, 3)
 
-        self.fc1_branch_translation = nn.Linear(1024 * 3 * 10, 500)
+        self.fc1_branch_translation = nn.Linear(512 * 8, 500)
         self.relu_fc1_branch_translation = nn.ReLU()
         self.fc2_branch_translation = nn.Linear(500, 100)
         self.relu_fc2_branch_translation = nn.ReLU()
@@ -61,7 +65,9 @@ class FlowNetS_V2(nn.Module):
         out_conv5 = self.conv5_1(self.conv5(out_conv4))
         out_conv6 = self.conv6_1(self.conv6(out_conv5))
 
-        feature_extraction_output = out_conv6.reshape(-1, 1024*3*10)
+        out_conv7 = self.ac_conv7(self.conv7(out_conv6))
+
+        feature_extraction_output = out_conv7.reshape(-1, 512*8)
         fc1_branch_angle = self.relu_fc1_branch_angle(self.fc1_branch_angle(feature_extraction_output))
         fc2_branch_angle = self.relu_fc2_branch_angle(self.fc2_branch_angle(fc1_branch_angle))
         output_branch_angle = self.output_branch_angle(fc2_branch_angle)

@@ -35,7 +35,7 @@ class Arrow3D(FancyArrowPatch):
 
 def main():
     parser = ArgumentParser(description='Camera movement estimation visualizer')
-    parser.add_argument('-s', '--sequences', nargs='+', type=int, default=[1, 2])
+    parser.add_argument('-s', '--sequences', nargs='+', type=int, default=[1])
     parser.add_argument('-b', '--batch-size', type=int, default=10)
     parser.add_argument('--kitti-base-dir', type=str, default='../dataset')
     parser.add_argument('-m', '--model', type=str, required=True)
@@ -51,12 +51,17 @@ def main():
     ax.set_proj_type('ortho')
     kitti = [[], [], []]
     our = [[], [], []]
-    model = FlowNetS()
+    from models.FlownetSimpleLikeV2 import FlowNetS_V2
+    # model = FlowNetS()
+    model = FlowNetS_V2()
+
     model.load_state_dict(torch.load(args.model, map_location=torch.device('cpu')))
     if use_cuda:
         print('CUDA used.')
         model = model.cuda()
     model.eval()
+    from models.FlownetSimpleLike import RMSEWeightedLoss
+    loss = RMSEWeightedLoss()
     starting_points = [np.array([0., 0., 0.]) for _ in args.sequences]
     starting_rotations = [np.array([0., 0., 0.]) for _ in args.sequences]
     starting_points_estimate = [np.array([0., 0., 0.]) for _ in args.sequences]
@@ -82,6 +87,9 @@ def main():
                 input_tensor = input_tensor.cuda()
             y = model(input_tensor)
             y = y.to("cpu")
+
+            print(abs(ground_truth-y))
+            print(loss(y, ground_truth))
             rotation = sum(ground_truth[:, 0:3]).numpy()
             rotation_estimate = sum(y[:, 0:3]).numpy()
             translation = sum(ground_truth[:, 3:6]).numpy()
@@ -90,13 +98,20 @@ def main():
             p = starting_points[dataset_idx].copy()
             pe = starting_points_estimate[dataset_idx].copy()
             starting_points[dataset_idx] += translation
-            starting_points_estimate[dataset_idx] += translation_estimate
+
             r = Rotation.from_euler('zxy', starting_rotations[dataset_idx], degrees=False)
             re = Rotation.from_euler('zxy', starting_rotations_estimate[dataset_idx], degrees=False)
-            camera_point = r.apply(starting_points[dataset_idx])
+            if (max(r.as_euler('zxy', degrees=True)- re.as_euler('zxy', degrees=True))) > 5:
+                print(r.as_euler('zxy', degrees=True), re.as_euler('zxy', degrees=True))
+                print()
+            #translation_estimate = re.apply(translation_estimate)
+            starting_points_estimate[dataset_idx] += translation_estimate
+
+            camera_point = r.apply((0,0,6))
             camera_point_estimate = re.apply(starting_points_estimate[dataset_idx])
-            ax.add_artist(Arrow3D(p, camera_point, arrowstyle='-|>'))
-            ax.add_artist(Arrow3D(pe, camera_point_estimate, arrowstyle='-|>'))
+            # if i % 10 == 0:
+            #     ax.add_artist(Arrow3D(p, camera_point, arrowstyle='-|>'))
+            # ax.add_artist(Arrow3D(pe, camera_point_estimate, arrowstyle='-|>'))
             starting_rotations[dataset_idx] += rotation
             starting_rotations_estimate[dataset_idx] += rotation_estimate
             i += len(batch)
@@ -106,9 +121,9 @@ def main():
             our[0].append(starting_points_estimate[dataset_idx][0])
             our[1].append(starting_points_estimate[dataset_idx][1])
             our[2].append(starting_points_estimate[dataset_idx][2])
-            ax.plot3D(*kitti)
-            ax.plot3D(*our)
             print(i)
+            if i>300:
+                break
     ax.plot3D(*kitti)
     ax.plot3D(*our)
     plt.show()

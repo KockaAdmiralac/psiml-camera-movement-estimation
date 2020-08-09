@@ -11,7 +11,7 @@ class RMSEWeightedLoss(nn.Module):
 
     def forward(self, yhat, y):
         # Weighted RMSE loss
-        loss = self.beta*torch.sqrt(self.mse(y[:, :3], yhat[:, :3]) + self.eps)+torch.sqrt(self.mse(y[:, 3:], yhat[:, 3:]) + self.eps)
+        loss = self.beta*torch.sqrt(self.mse(y[:, :3], yhat[:, :3]))+torch.sqrt(self.mse(y[:, 3:], yhat[:, 3:]))
 
         #loss = (self.beta**2) * self.mse(y[:, :3], yhat[:, :3]) + self.mse(y[:, 3:], yhat[:, 3:])
         return loss
