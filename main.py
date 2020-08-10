@@ -57,6 +57,8 @@ def main():
         shuffle=True,
         drop_last=True
     )
+
+    learning_rate = args.learning_rate
     # model = FlowNetS()
     from models.FlownetSimpleLikeV2 import FlowNetS_V2
     from models.FlownetSimpleLikeV3 import FlowNetS_V3
@@ -71,6 +73,7 @@ def main():
         print('Load FlowNet pretrained model')
         # Use only conv-layer-part of FlowNet as CNN for DeepVO
         model_dict = left.state_dict()
+
         update_dict = {k: v for k, v in pretrained_w.items() if k in model_dict}
         model_dict.update(update_dict)
         left.load_state_dict(model_dict)
@@ -83,13 +86,29 @@ def main():
         del pretrained_w
         del update_dict
     model = FlowNetS_V2_Stereo(left, right)
+
+    if args.pretrained_flownet:
+        pretrained_w = torch.load(args.pretrained_flownet, map_location='cpu')
+        model_dict = model.state_dict()
+        update_dict = {k: v for k, v in pretrained_w.items() if k in model_dict}
+        model_dict.update(update_dict)
+        model.load_state_dict(model_dict)
+
+        del pretrained_w
+        del update_dict
+
     use_cuda = torch.cuda.is_available()
     if use_cuda:
         print('CUDA used.')
         model = model.cuda()
 
-    learning_rate = args.learning_rate
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optim_path = args.pretrained_flownet + "_optim"
+    if os.path.exists(optim_path):
+        checkpoint = torch.load(optim_path, map_location="cpu")
+        optimizer.load_state_dict(checkpoint)
+
+
     loss = RMSEWeightedLoss()
     # lr_sheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
@@ -139,6 +158,8 @@ def main():
                 if not os.path.exists(args.output_path):
                     os.makedirs(args.output_path)
                 torch.save(model.state_dict(),
+                           os.path.join(args.output_path, args.model_tag + "_e" + str(epoch) + ".model"))
+                torch.save(model.state_dict(),
                            os.path.join(args.output_path,
                                         args.model_tag + "_e" + str(epoch) + "_gstep" + str(global_step) + ".model"))
 
@@ -151,11 +172,12 @@ def main():
                                           raw_output_diff[i] / epoch_steps,
                                           global_step)
             summary_writer.add_scalar("train_loss/Epoch average loss", total_loss / epoch_steps, global_step)
-        val_loss = do_validation(validation_dataloader, model, -1, loss, use_cuda, global_step, summary_writer, True)
+        #val_loss = do_validation(validation_dataloader, model, -1, loss, use_cuda, global_step, summary_writer, True)
 
         if not os.path.exists(args.output_path):
             os.makedirs(args.output_path)
         torch.save(model.state_dict(), os.path.join(args.output_path, args.model_tag + "_e" + str(epoch) + ".model"))
+        torch.save(optimizer.state_dict(), os.path.join(args.output_path, args.model_tag + "_e" + str(epoch) + ".model_optim"))
 
         do_validation(validation_dataloader, model, args.validation_size, loss, use_cuda, global_step, summary_writer)
 

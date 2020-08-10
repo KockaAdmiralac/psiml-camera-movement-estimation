@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+from torch.nn import init
 
 # Taken and adapted from:
 # https://github.com/ClementPinard/FlowNetPytorch/blob/master/models/FlowNetS.py
@@ -72,6 +72,12 @@ class FlowNetS_V2_Stereo(nn.Module):
         self.relu_fc2_branch_translation = nn.ReLU()
 
         self.output_branch_translation = nn.Linear(100, 3)
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+                if m.bias is not None:
+                    init.uniform_(m.bias)
+                init.xavier_uniform_(m.weight)
 
     def forward(self, x):
         feat1 = self.left_image_processing(x[:,:6,:,:])

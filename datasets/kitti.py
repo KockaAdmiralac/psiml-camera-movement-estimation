@@ -49,8 +49,13 @@ class KITTIDataset(Dataset):
         preprocessed_ground_truth_2 = self.preprocess_odometry_matrix(raw_odometry_matrix_2)
 
         ground_truth = preprocessed_ground_truth_2 - preprocessed_ground_truth_1
-        ground_truth[3:] = torch.from_numpy((raw_odometry_matrix_2[:3,:3].T).dot(ground_truth[3:]))
+        initial_raw_oddometry_matrix = current_dataset.poses[0][:3, :4]
+        initial_mat = self.preprocess_odometry_matrix(initial_raw_oddometry_matrix)
 
+        r = Rotation.from_euler('zxy', -(preprocessed_ground_truth_1[:3]-initial_mat[:3]), degrees=False)
+
+        #ground_truth[3:] = torch.from_numpy((raw_odometry_matrix_2[:3,:3]).dot(ground_truth[3:]))
+        ground_truth[3:] = torch.from_numpy(r.apply(ground_truth[3:]))
         # TODO: Make configurable
 
         if self.create_stereo:
@@ -63,7 +68,7 @@ class KITTIDataset(Dataset):
                                      self.preprocess_image(current_dataset.get_cam2(index_in_dataset + 1))), 0)
         return (
             image_stack,
-            ground_truth, raw_odometry_matrix_2
+            ground_truth, raw_odometry_matrix_2, initial_raw_oddometry_matrix
         )
 
     def dataset_idx(self, idx: int) -> int:
