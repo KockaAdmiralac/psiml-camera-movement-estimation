@@ -12,10 +12,10 @@ RESIZE_SIZE = [184, 608]
 MEAN = (-0.14968217427134656, -0.12941663107068363, -0.1320610301921484)
 STD = (1, 1, 1)
 
-
 class KITTIDataset(Dataset):
 
-    def __init__(self, base_path: str, sequences: List[int]):
+    def __init__(self, base_path: str, sequences: List[int], create_stereo=False):
+        self.create_stereo = create_stereo
         # Maps index // batch_size to the dataset under that index
         self.idx_to_dataset = []
         # Length of the whole dataset (all sequences summed, rounded by batch_size)
@@ -49,13 +49,26 @@ class KITTIDataset(Dataset):
         preprocessed_ground_truth_2 = self.preprocess_odometry_matrix(raw_odometry_matrix_2)
 
         ground_truth = preprocessed_ground_truth_2 - preprocessed_ground_truth_1
-        ground_truth[3:] = torch.from_numpy((raw_odometry_matrix_2[:3,:3].T).dot(ground_truth[3:]))
+        initial_raw_oddometry_matrix = current_dataset.poses[0][:3, :4]
+        initial_mat = self.preprocess_odometry_matrix(initial_raw_oddometry_matrix)
 
-        # Return two consecutive images
+        r = Rotation.from_euler('zxy', -(preprocessed_ground_truth_1[:3]-initial_mat[:3]), degrees=False)
+
+        #ground_truth[3:] = torch.from_numpy((raw_odometry_matrix_2[:3,:3]).dot(ground_truth[3:]))
+        ground_truth[3:] = torch.from_numpy(r.apply(ground_truth[3:]))
+        # TODO: Make configurable
+
+        if self.create_stereo:
+            image_stack = torch.cat((self.preprocess_image(current_dataset.get_cam2(index_in_dataset)),
+                                     self.preprocess_image(current_dataset.get_cam2(index_in_dataset + 1)),
+                                     self.preprocess_image(current_dataset.get_cam3(index_in_dataset)),
+                                     self.preprocess_image(current_dataset.get_cam3(index_in_dataset + 1))), 0)
+        else:
+            image_stack = torch.cat((self.preprocess_image(current_dataset.get_cam2(index_in_dataset)),
+                                     self.preprocess_image(current_dataset.get_cam2(index_in_dataset + 1))), 0)
         return (
-            self.preprocess_image(current_dataset.get_cam2(index_in_dataset)),
-            self.preprocess_image(current_dataset.get_cam2(index_in_dataset + 1)),
-            ground_truth, raw_odometry_matrix_2
+            image_stack,
+            ground_truth, raw_odometry_matrix_2, initial_raw_oddometry_matrix
         )
 
     def dataset_idx(self, idx: int) -> int:
@@ -85,3 +98,5 @@ class KITTIDataset(Dataset):
 
         preprocessed_output = np.concatenate((rotation_angles.flatten(), translation.flatten()))
         return torch.from_numpy(preprocessed_output)
+
+

@@ -42,7 +42,7 @@ def main():
     summary_writer = SummaryWriter(log_dir="runs/"+args.model_tag+"_"+str(args.learning_rate)+"_"+str(args.batch_size))
 
     # Train set
-    dataset = KITTIDataset(args.kitti_base_dir, [0, 2, 5, 6, 7, 8, 9, 10])  #
+    dataset = KITTIDataset(args.kitti_base_dir, [0, 2, 5, 6, 7, 8, 9, 10], create_stereo=True)  #
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=args.batch_size,
@@ -50,28 +50,50 @@ def main():
         drop_last=True
     )
     # Validation set:
-    validation_dataset = KITTIDataset(args.kitti_base_dir, [1, 3, 4])  # , 3, 4
+    validation_dataset = KITTIDataset(args.kitti_base_dir, [1, 3, 4], create_stereo=True)  # , 3, 4
     validation_dataloader = DataLoader(
         dataset=validation_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         drop_last=True
     )
+
+    learning_rate = args.learning_rate
     # model = FlowNetS()
     from models.FlownetSimpleLikeV2 import FlowNetS_V2
     from models.FlownetSimpleLikeV3 import FlowNetS_V3
-    model = FlowNetS_V2()
+    from models.FlownetSimpleLikeV2Stereo import FlowNetS_V2_Stereo, FlowNetFeatureExtraction
+    #model = FlowNetS_V2()
     #model = FlowNetS_V3()
 
     if args.pretrained_flownet:
         pretrained_w = torch.load(args.pretrained_flownet, map_location='cpu')
-
+        left = FlowNetFeatureExtraction()
+        right = FlowNetFeatureExtraction()
         print('Load FlowNet pretrained model')
         # Use only conv-layer-part of FlowNet as CNN for DeepVO
+        model_dict = left.state_dict()
+
+        update_dict = {k: v for k, v in pretrained_w.items() if k in model_dict}
+        model_dict.update(update_dict)
+        left.load_state_dict(model_dict)
+
+        model_dict = right.state_dict()
+        update_dict = {k: v for k, v in pretrained_w.items() if k in model_dict}
+        model_dict.update(update_dict)
+        right.load_state_dict(model_dict)
+
+        del pretrained_w
+        del update_dict
+    model = FlowNetS_V2_Stereo(left, right)
+
+    if args.pretrained_flownet:
+        pretrained_w = torch.load(args.pretrained_flownet, map_location='cpu')
         model_dict = model.state_dict()
         update_dict = {k: v for k, v in pretrained_w.items() if k in model_dict}
         model_dict.update(update_dict)
         model.load_state_dict(model_dict)
+
         del pretrained_w
         del update_dict
 
@@ -80,8 +102,13 @@ def main():
         print('CUDA used.')
         model = model.cuda()
 
-    learning_rate = args.learning_rate
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optim_path = args.pretrained_flownet + "_optim"
+    if os.path.exists(optim_path):
+        checkpoint = torch.load(optim_path, map_location="cpu")
+        optimizer.load_state_dict(checkpoint)
+
+
     loss = RMSEWeightedLoss()
     # lr_sheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
@@ -94,9 +121,8 @@ def main():
         raw_output_diff = torch.zeros(6)
         for batch in dataloader:
             model.train()
-            cam0_img, cam1_img, ground_truth, _ = batch
+            input_tensor, ground_truth, _ = batch
 
-            input_tensor = torch.cat((cam0_img, cam1_img), 1)
             if use_cuda:
                 input_tensor = input_tensor.cuda()
             y = model(input_tensor)
@@ -132,6 +158,8 @@ def main():
                 if not os.path.exists(args.output_path):
                     os.makedirs(args.output_path)
                 torch.save(model.state_dict(),
+                           os.path.join(args.output_path, args.model_tag + "_e" + str(epoch) + ".model"))
+                torch.save(model.state_dict(),
                            os.path.join(args.output_path,
                                         args.model_tag + "_e" + str(epoch) + "_gstep" + str(global_step) + ".model"))
 
@@ -144,11 +172,12 @@ def main():
                                           raw_output_diff[i] / epoch_steps,
                                           global_step)
             summary_writer.add_scalar("train_loss/Epoch average loss", total_loss / epoch_steps, global_step)
-        val_loss = do_validation(validation_dataloader, model, -1, loss, use_cuda, global_step, summary_writer, True)
+        #val_loss = do_validation(validation_dataloader, model, -1, loss, use_cuda, global_step, summary_writer, True)
 
         if not os.path.exists(args.output_path):
             os.makedirs(args.output_path)
         torch.save(model.state_dict(), os.path.join(args.output_path, args.model_tag + "_e" + str(epoch) + ".model"))
+        torch.save(optimizer.state_dict(), os.path.join(args.output_path, args.model_tag + "_e" + str(epoch) + ".model_optim"))
 
         do_validation(validation_dataloader, model, args.validation_size, loss, use_cuda, global_step, summary_writer)
 
@@ -163,9 +192,8 @@ def do_validation(validation_dataloader, model, validation_size, loss, use_cuda,
         for batch in validation_dataloader:
             if validation_size >= 0 and validation_step >= validation_size:
                 break
-            cam0_img, cam1_img, ground_truth, _ = batch
+            input_tensor, ground_truth, _ = batch
 
-            input_tensor = torch.cat((cam0_img, cam1_img), 1)
             if use_cuda:
                 input_tensor = input_tensor.cuda()
             y = model(input_tensor)
